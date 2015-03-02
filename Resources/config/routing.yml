@@ -1,0 +1,26 @@
+# This file is part of the CampaignChain package.
+#
+# (c) Sandro Groganz <sandro@campaignchain.com>
+#
+# For the full copyright and license information, please view the LICENSE
+# file that was distributed with this source code.
+
+campaignchain_activity_mailchimp_new:
+    pattern: /activity/mailchimp/new
+    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:new }
+
+campaignchain_activity_mailchimp_edit:
+    pattern: /activity/mailchimp/{id}/edit
+    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:edit }
+
+campaignchain_activity_mailchimp_edit_modal:
+    pattern: /modal/activity/mailchimp/{id}/edit
+    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:editModal }
+
+campaignchain_activity_mailchimp_read:
+    pattern: /activity/mailchimp/{id}
+    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:read }
+
+campaignchain_activity_mailchimp_preview:
+    pattern: /activity/mailchimp/preview/{id}
+    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:preview }

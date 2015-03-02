@@ -1,0 +1,12 @@
+# This file is part of the CampaignChain package.
+#
+# (c) Sandro Groganz <sandro@campaignchain.com>
+#
+# For the full copyright and license information, please view the LICENSE
+# file that was distributed with this source code.
+
+services:
+    campaignchain.channel.mailchimp.rest.client:
+        class: CampaignChain\Channel\MailChimpBundle\REST\MailChimpClient
+        calls:
+            - [setContainer, ["@service_container"]]

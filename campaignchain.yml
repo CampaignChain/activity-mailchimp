@@ -1,0 +1,14 @@
+modules:
+    campaignchain-mailchimp:
+        display_name: Add upcoming newsletter campaign
+        channels: 
+            - campaignchain/channel-mailchimp/campaignchain-mailchimp
+        routes: 
+            new: campaignchain_activity_mailchimp_new
+            edit: campaignchain_activity_mailchimp_edit
+            edit_modal: campaignchain_activity_mailchimp_edit_modal
+            edit_api:
+            read: campaignchain_activity_mailchimp_read
+        hooks:
+            campaignchain-due: true
+            campaignchain-assignee: true
