@@ -11,6 +11,10 @@
         }
     ],
     "require": {
+        "campaignchain/core": "dev-master",
+        "campaignchain/location-mailchimp": "dev-master",
+        "campaignchain/operation-mailchimp": "dev-master",
+        "campaignchain/hook-due": "dev-master"
     },
     "autoload": {
         "psr-4": { "CampaignChain\\Activity\\MailChimpBundle\\": "" }
