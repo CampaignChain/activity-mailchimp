@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\Request;
 use CampaignChain\CoreBundle\Entity\Operation;
 use CampaignChain\CoreBundle\Entity\Location;
 use CampaignChain\CoreBundle\Entity\Medium;
+use CampaignChain\CoreBundle\Entity\Action;
 
 class MailChimpController extends Controller
 {
@@ -28,6 +29,7 @@ class MailChimpController extends Controller
     const LOCATION_MODULE_IDENTIFIER    = 'campaignchain-mailchimp-newsletter';
     const TRIGGER_HOOK_IDENTIFIER       = 'campaignchain-due';
     const LINK_ADMIN_CAMPAIGNS          = 'https://admin.mailchimp.com/campaigns/';
+    const MAILCHIMP_DATETIME_FORMAT     = 'Y-m-d H:i:s';
 
     public function newAction(Request $request)
     {
@@ -57,6 +59,8 @@ class MailChimpController extends Controller
         }
 
         $locationService = $this->get('campaignchain.core.location');
+print_r($upcomingNewsletters);
+        $newsletters = array();
 
         foreach($upcomingNewsletters['data'] as $key => $upcomingNewsletter){
             // Check if newsletter has already been added to this Campaign.
@@ -66,17 +70,19 @@ class MailChimpController extends Controller
             )){
                 // TODO: If send_time not empty, then pass to due hook.
                 $newsletters[$key] = $upcomingNewsletter['title']
-                    .'('.$upcomingNewsletter['subject'].')';
-            } else {
-                $this->get('session')->getFlashBag()->add(
-                    'warning',
-                    'All upcoming newsletters have already been added to the campaign "'.$campaign->getName().'".'
-                );
-
-                return $this->redirect(
-                    $this->generateUrl('campaignchain_core_activities_new')
-                );
+                    .' ('.$upcomingNewsletter['subject'].')';
             }
+        }
+
+        if(!count($newsletters)){
+            $this->get('session')->getFlashBag()->add(
+                'warning',
+                'All upcoming newsletters have already been added to the campaign "'.$campaign->getName().'".'
+            );
+
+            return $this->redirect(
+                $this->generateUrl('campaignchain_core_activities_new')
+            );
         }
 
         $activityType = $this->get('campaignchain.core.form.type.activity');
@@ -99,7 +105,7 @@ class MailChimpController extends Controller
         $operationForms[] = array(
             'identifier' => self::OPERATION_MODULE_IDENTIFIER,
             'form' => $operationType,
-            'label' => 'Include Webinar',
+            'label' => 'Add Newsletter',
         );
         $activityType->setOperationForms($operationForms);
         $activityType->setCampaign($campaign);
@@ -197,10 +203,10 @@ class MailChimpController extends Controller
                 $repository->flush();
 
                 // Schedule the newsletter on MailChimp.
-//                $client->campaigns->schedule(
-//                    $newsletterOperation->getCampaignId(),
-//                    $newsletterOperation->getSendTime()->format()
-//                );
+                $client->campaigns->schedule(
+                    $newsletterOperation->getCampaignId(),
+                    $newsletterOperation->getSendTime()->format(self::MAILCHIMP_DATETIME_FORMAT)
+                );
 
                 $repository->getConnection()->commit();
             } catch (\Exception $e) {
@@ -234,14 +240,204 @@ class MailChimpController extends Controller
 
     public function editAction(Request $request, $id)
     {
-        return $this->redirect(
-            $this->generateUrl(
-                'campaignchain_activity_mailchimp_read',
-                array(
-                    'id' => $id,
-                )
-            )
-        );
+        $activityService = $this->get('campaignchain.core.activity');
+        $activity = $activityService->getActivity($id);
+        $campaign = $activity->getCampaign();
+
+        // Get the one operation.
+        $operation = $activityService->getOperation($id);
+
+        // Get the newsletter details.
+        $localNewsletter = $this->getNewsletter($operation);
+
+        // Retrieve up-to-date newsletter data from MailChimp
+        $restService = $this->get('campaignchain.channel.mailchimp.rest.client');
+        $client = $restService->connectByActivity($activity);
+        $remoteNewsletterData = $client->campaigns->getList(array(
+            'campaign_id' => $localNewsletter->getCampaignId(),
+        ));
+
+        $remoteNewsletter = $remoteNewsletterData['data'][0];
+
+        // If content update times of remote and local newsletter diverge, then
+        // the content differs.
+        if(
+            new \DateTime($remoteNewsletter['content_updated_time'])
+            != $localNewsletter->getContentUpdatedTime()
+            ||
+            $localNewsletter->getContentUpdatedTime() == null
+            ||
+            strlen($remoteNewsletter['content_updated_time']) == 0
+        ){
+            $contentDiff = '';
+
+            // 1. Check newsletter's scheduled send time aka due date.
+            $remoteNewsletterSendTime = new \DateTime($remoteNewsletter['send_time']);
+
+            // 1.1 Different send times.
+            if($remoteNewsletterSendTime != $localNewsletter->getSendTime()){
+                $dueDiff =
+                    '<p><strike>'.$localNewsletter->getSendTime()->format(self::MAILCHIMP_DATETIME_FORMAT).'</strike></p>'
+                    .'<p>'.$remoteNewsletter['send_time'].'</p>';
+
+                // Check whether new send_time is within campaign duration.
+                $datetimeUtil = $this->get('campaignchain.core.util.datetime');
+                if($datetimeUtil->isWithinDuration(
+                    $campaign->getStartDate(),
+                    $remoteNewsletterSendTime,
+                    $campaign->getEndDate()
+                )){
+                    $localNewsletterSendTime = $remoteNewsletterSendTime;
+                    $contentDiff .=
+                        '<h4>Due</h4>'.$dueDiff;
+                } else {
+                    // Modified send_time is not within campaign duration.
+                    $localNewsletterSendTime = null;
+
+                    // Set activity status to paused.
+                    $activity->setStatus(Action::STATUS_INTERACTION_REQUIRED);
+
+                    $this->get('session')->getFlashBag()->add(
+                        'warning',
+                        '<p>Due date has been modified remotely on MailChimp and is not within the campaign duration.</p>'
+                        .$dueDiff
+                        .'<p>This activity was paused.</p>'
+                        .'<p>Please define a new due date to reactivate it.</p>'
+                    );
+                }
+
+                $localNewsletter->setSendTime($localNewsletterSendTime);
+                $activity->setStartDate($localNewsletterSendTime);
+                $operation->setStartDate($localNewsletterSendTime);
+            }
+
+            // 1.2 Local send time is null, which means changed data got
+            // updated before, but no due date provided by user.
+
+            // Check newsletter title.
+            if($remoteNewsletter['title'] != $localNewsletter->getTitle()){
+                $contentDiff .=
+                    '<h4>Title</h4>'
+                    .'<p><strike>'.$localNewsletter->getTitle().'</strike></p>'
+                    .'<p>'.$remoteNewsletter['title'].'</p>';
+                $localNewsletter->setTitle($remoteNewsletter['title']);
+                $activity->setName($remoteNewsletter['title']);
+                $operation->setName($remoteNewsletter['title']);
+            }
+
+            // Check subject.
+            if($remoteNewsletter['subject'] != $localNewsletter->getSubject()){
+                $contentDiff .=
+                    '<h4>Subject</h4>'
+                    .'<p><strike>'.$localNewsletter->getSubject().'</strike></p>'
+                    .'<p>'.$remoteNewsletter['subject'].'</p>';
+                $localNewsletter->setSubject($remoteNewsletter['subject']);
+            }
+
+            // Check from_name.
+            if($remoteNewsletter['from_name'] != $localNewsletter->getFromName()){
+                $contentDiff .=
+                    '<h4>From Name</h4>'
+                    .'<p><strike>'.$localNewsletter->getFromName().'</strike></p>'
+                    .'<p>'.$remoteNewsletter['from_name'].'</p>';
+                $localNewsletter->setFromName($remoteNewsletter['from_name']);
+            }
+
+            // Check from_email.
+            if($remoteNewsletter['from_email'] != $localNewsletter->getFromEmail()){
+                $contentDiff .=
+                    '<h4>From Email</h4>'
+                    .'<p><strike>'.$localNewsletter->getFromEmail().'</strike></p>'
+                    .'<p>'.$remoteNewsletter['from_email'].'</p>';
+                $localNewsletter->setFromEmail($remoteNewsletter['from_email']);
+            }
+
+            if(strlen($contentDiff)){
+                // Update CampaignChain to reflect remote changes.
+                $localNewsletter->setContentUpdatedTime(new \DateTime($remoteNewsletter['content_updated_time']));
+                $localNewsletter->setStatus($remoteNewsletter['status']);
+
+                $repository = $this->getDoctrine()->getManager();
+                $repository->persist($localNewsletter);
+                $repository->persist($operation);
+                $repository->persist($activity);
+                $repository->flush();
+
+                $this->get('session')->getFlashBag()->add(
+                    'info',
+                    '<p>The following newsletter data has been edited remotely on MailChimp. These changes have just been updated in CampaignChain.</p>'.$contentDiff
+                );
+            }
+        }
+
+        $activityType = $this->get('campaignchain.core.form.type.activity');
+        $activityType->setBundleName(self::ACTIVITY_BUNDLE_NAME);
+        $activityType->setModuleIdentifier(self::ACTIVITY_MODULE_IDENTIFIER);
+        $activityType->showNameField(false);
+        $activityType->setCampaign($campaign);
+
+        $form = $this->createForm($activityType, $activity);
+
+        $form->handleRequest($request);
+
+        // TODO: Check if newsletter schedule dates were edited on MailChimp.
+
+        if ($form->isValid()) {
+            $repository = $this->getDoctrine()->getManager();
+
+            // Make sure that data stays intact by using transactions.
+            try {
+                $repository->getConnection()->beginTransaction();
+
+                // The activity equals the operation. Thus, we update the operation with the same data.
+                $activityService = $this->get('campaignchain.core.activity');
+                $operation = $activityService->getOperation($id);
+                $operation->setName($activity->getName());
+                $repository->persist($operation);
+
+
+                $hookService = $this->get('campaignchain.core.hook');
+                $activity = $hookService->processHooks(self::BUNDLE_NAME, self::MODULE_IDENTIFIER, $activity, $form);
+                $repository->persist($activity);
+
+                $repository->flush();
+
+                // Schedule the newsletter on MailChimp.
+                $client->campaigns->schedule(
+                    $newsletterOperation->getCampaignId(),
+                    $newsletterOperation->getSendTime()->format('Y-m-d H:i:s')
+                );
+
+                $this->get('session')->getFlashBag()->add(
+                    'success',
+                    'Your Facebook activity <a href="'.$this->generateUrl('campaignchain_core_activity_edit', array('id' => $activity->getId())).'">'.$activity->getName().'</a> was edited successfully.'
+                );
+
+                // Status Update to be sent immediately?
+                // TODO: This is an intermediary hardcoded hack and should be instead handled by the scheduler.
+                if ($form->get('campaignchain_hook_campaignchain_due')->has('execution_choice') && $form->get('campaignchain_hook_campaignchain_due')->get('execution_choice')->getData() == 'now') {
+                    $job = $this->get('campaignchain.job.operation.facebook.publish_status');
+                    $job->execute($operation->getId());
+                    // TODO: Add different flashbag which includes link to posted message on Facebook
+                }
+
+                return $this->redirect($this->generateUrl('campaignchain_core_activities'));
+            } catch (\Exception $e) {
+                $repository->getConnection()->rollback();
+                throw $e;
+            }
+        }
+
+        return $this->render(
+            'CampaignChainOperationMailChimpBundle::edit.html.twig',
+            array(
+                'page_title' => $activity->getName(),
+                'activity' => $activity,
+                'newsletter' => $localNewsletter,
+                'form' => $form->createView(),
+                'form_submit_label' => 'Save',
+                'form_cancel_route' => 'campaignchain_core_activities'
+            ));
     }
 
     public function readAction(Request $request, $id){
