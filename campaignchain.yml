@@ -10,5 +10,6 @@ modules:
             edit_api:
             read: campaignchain_activity_mailchimp_read
         hooks:
-            campaignchain-due: true
-            campaignchain-assignee: true
+            default:
+                campaignchain-due: true
+                campaignchain-assignee: true
