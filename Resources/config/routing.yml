@@ -17,6 +17,12 @@ campaignchain_activity_mailchimp_edit_modal:
     pattern: /modal/activity/mailchimp/{id}/edit
     defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:editModal }
 
+campaignchain_activity_mailchimp_edit_api:
+    pattern: /api/private/activity/mailchimp/byactivity/{id}/edit
+    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:editApi }
+    options:
+        expose: true
+
 campaignchain_activity_mailchimp_read:
     pattern: /activity/mailchimp/{id}
     defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:read }

@@ -7,7 +7,7 @@ modules:
             new: campaignchain_activity_mailchimp_new
             edit: campaignchain_activity_mailchimp_edit
             edit_modal: campaignchain_activity_mailchimp_edit_modal
-            edit_api:
+            edit_api: campaignchain_activity_mailchimp_edit_api
             read: campaignchain_activity_mailchimp_read
         hooks:
             default:

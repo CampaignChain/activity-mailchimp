@@ -18,6 +18,10 @@ use CampaignChain\CoreBundle\Entity\Operation;
 use CampaignChain\CoreBundle\Entity\Location;
 use CampaignChain\CoreBundle\Entity\Medium;
 use CampaignChain\CoreBundle\Entity\Action;
+use Symfony\Component\Serializer\Serializer;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Normalizer\GetSetMethodNormalizer;
+use Symfony\Component\HttpFoundation\Response;
 
 class MailChimpController extends Controller
 {
@@ -442,6 +446,7 @@ class MailChimpController extends Controller
             'CampaignChainOperationMailChimpBundle::edit.html.twig',
             array(
                 'page_title' => $activity->getName(),
+                'page_secondary_title' => $localNewsletter->getSubject(),
                 'activity' => $activity,
                 'newsletter' => $localNewsletter,
                 'form' => $form->createView(),
@@ -477,6 +482,7 @@ class MailChimpController extends Controller
     {
         $activityService = $this->get('campaignchain.core.activity');
         $activity = $activityService->getActivity($id);
+        $campaign = $activity->getCampaign();
 
         // Get the one operation.
         $operation = $activityService->getOperation($id);
@@ -484,17 +490,54 @@ class MailChimpController extends Controller
         // Get the newsletter details.
         $newsletter = $this->getNewsletter($operation);
 
-        // TODO: Check if newsletter schedule dates were edited on MailChimp.
+        $activityType = $this->get('campaignchain.core.form.type.activity');
+        $activityType->setBundleName(self::ACTIVITY_BUNDLE_NAME);
+        $activityType->setModuleIdentifier(self::ACTIVITY_MODULE_IDENTIFIER);
+        $activityType->showNameField(false);
+        $activityType->setCampaign($campaign);
+
+        $form = $this->createForm($activityType, $activity);
 
         return $this->render(
-            'CampaignChainOperationMailChimpBundle::read_modal.html.twig',
+            'CampaignChainOperationMailChimpBundle::edit_modal.html.twig',
             array(
                 'page_title' => $activity->getName(),
                 'operation' => $operation,
                 'activity' => $activity,
                 'newsletter' => $newsletter,
                 'show_date' => true,
+                'form' => $form->createView(),
             ));
+    }
+
+    public function editApiAction(Request $request, $id)
+    {
+        $responseData = array();
+
+        $data = $request->get('campaignchain_core_activity');
+
+        //$responseData['payload'] = $data;
+
+        $activityService = $this->get('campaignchain.core.activity');
+        $activity = $activityService->getActivity($id);
+
+        $hookService = $this->get('campaignchain.core.hook');
+        $activity = $hookService->processHooks(self::ACTIVITY_BUNDLE_NAME, self::ACTIVITY_MODULE_IDENTIFIER, $activity, $data);
+
+        $repository = $this->getDoctrine()->getManager();
+        $repository->persist($activity);
+        $repository->flush();
+
+        $responseData['start_date'] =
+        $responseData['end_date'] =
+            $activity->getStartDate()->format(\DateTime::ISO8601);
+
+        $encoders = array(new JsonEncoder());
+        $normalizers = array(new GetSetMethodNormalizer());
+        $serializer = new Serializer($normalizers, $encoders);
+
+        $response = new Response($serializer->serialize($responseData, 'json'));
+        return $response->setStatusCode(Response::HTTP_OK);
     }
 
     public function previewAction(Request $request, $id){
@@ -523,5 +566,29 @@ class MailChimpController extends Controller
         }
 
         return $newsletter;
+    }
+
+    public function readModalAction(Request $request, $id)
+    {
+        $activityService = $this->get('campaignchain.core.activity');
+        $activity = $activityService->getActivity($id);
+
+        // Get the one operation.
+        $operation = $activityService->getOperation($id);
+
+        // Get the newsletter details.
+        $newsletter = $this->getNewsletter($operation);
+
+        // TODO: Check if newsletter schedule dates were edited on MailChimp.
+
+        return $this->render(
+            'CampaignChainOperationMailChimpBundle::read_modal.html.twig',
+            array(
+                'page_title' => $activity->getName(),
+                'operation' => $operation,
+                'activity' => $activity,
+                'newsletter' => $newsletter,
+                'show_date' => true,
+            ));
     }
 }
