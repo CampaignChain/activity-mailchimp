@@ -59,14 +59,14 @@ class MailChimpController extends Controller
         }
 
         $locationService = $this->get('campaignchain.core.location');
-print_r($upcomingNewsletters);
+
         $newsletters = array();
 
         foreach($upcomingNewsletters['data'] as $key => $upcomingNewsletter){
             // Check if newsletter has already been added to this Campaign.
-            if(!$locationService->existsInCampaign(
+            if(!$locationService->existsInAllCampaigns(
                 self::LOCATION_BUNDLE_NAME, self::LOCATION_MODULE_IDENTIFIER,
-                $upcomingNewsletter['id'], $campaign
+                $upcomingNewsletter['id']
             )){
                 // TODO: If send_time not empty, then pass to due hook.
                 $newsletters[$key] = $upcomingNewsletter['title']
@@ -77,7 +77,7 @@ print_r($upcomingNewsletters);
         if(!count($newsletters)){
             $this->get('session')->getFlashBag()->add(
                 'warning',
-                'All upcoming newsletters have already been added to the campaign "'.$campaign->getName().'".'
+                'All upcoming newsletters have already been added to campaigns.'
             );
 
             return $this->redirect(
@@ -116,7 +116,7 @@ print_r($upcomingNewsletters);
 
         if ($form->isValid()) {
             $newsletterKey = $form->get(self::OPERATION_MODULE_IDENTIFIER)->getData()['newsletter'];
-            $newsletter = $upcomingNewsletters['data'][$key];
+            $newsletter = $upcomingNewsletters['data'][$newsletterKey];
 
             $activity = $wizard->end();
 
@@ -202,11 +202,13 @@ print_r($upcomingNewsletters);
                 $newsletterOperation->setSendTime($activity->getStartDate());
                 $repository->flush();
 
-                // Schedule the newsletter on MailChimp.
-                $client->campaigns->schedule(
-                    $newsletterOperation->getCampaignId(),
-                    $newsletterOperation->getSendTime()->format(self::MAILCHIMP_DATETIME_FORMAT)
-                );
+                // Unschedule the newsletter on MailChimp if it was scheduled there,
+                // to let CampaignChain handle the scheduling.
+                if($newsletter['status'] == 'schedule') {
+                    $client->campaigns->unschedule(
+                        $newsletterOperation->getCampaignId()
+                    );
+                }
 
                 $repository->getConnection()->commit();
             } catch (\Exception $e) {
@@ -397,20 +399,22 @@ print_r($upcomingNewsletters);
                 $activityService = $this->get('campaignchain.core.activity');
                 $operation = $activityService->getOperation($id);
                 $operation->setName($activity->getName());
-                $repository->persist($operation);
-
 
                 $hookService = $this->get('campaignchain.core.hook');
-                $activity = $hookService->processHooks(self::BUNDLE_NAME, self::MODULE_IDENTIFIER, $activity, $form);
-                $repository->persist($activity);
+                $activity = $hookService->processHooks(self::ACTIVITY_BUNDLE_NAME, self::ACTIVITY_MODULE_IDENTIFIER, $activity, $form);
+
+                // Update local newsletter meta data
+                $localNewsletter->setSendTime($activity->getStartDate());
+
+                // Unschedule the newsletter on MailChimp if it was scheduled there,
+                // to let CampaignChain handle the scheduling.
+                if($remoteNewsletter['status'] == 'schedule') {
+                    $client->campaigns->unschedule(
+                        $localNewsletter->getCampaignId()
+                    );
+                }
 
                 $repository->flush();
-
-                // Schedule the newsletter on MailChimp.
-                $client->campaigns->schedule(
-                    $newsletterOperation->getCampaignId(),
-                    $newsletterOperation->getSendTime()->format('Y-m-d H:i:s')
-                );
 
                 $this->get('session')->getFlashBag()->add(
                     'success',
@@ -424,6 +428,8 @@ print_r($upcomingNewsletters);
                     $job->execute($operation->getId());
                     // TODO: Add different flashbag which includes link to posted message on Facebook
                 }
+
+                $repository->getConnection()->commit();
 
                 return $this->redirect($this->generateUrl('campaignchain_core_activities'));
             } catch (\Exception $e) {
