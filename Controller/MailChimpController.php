@@ -225,6 +225,14 @@ class MailChimpController extends Controller
                 'The newsletter <a href="'.$this->generateUrl('campaignchain_core_activity_edit', array('id' => $activity->getId())).'">'.$activity->getName().'</a> has been added successfully.'
             );
 
+            // Status Update to be sent immediately?
+            // TODO: This is an intermediary hardcoded hack and should be instead handled by the scheduler.
+            if ($form->get('campaignchain_hook_campaignchain_due')->has('execution_choice') && $form->get('campaignchain_hook_campaignchain_due')->get('execution_choice')->getData() == 'now') {
+                $job = $this->get('campaignchain.job.operation.mailchimp.newsletter');
+                $job->execute($operation->getId());
+                // TODO: Add different flashbag which includes link to posted message on Facebook
+            }
+
             return $this->redirect($this->generateUrl('campaignchain_core_activities'));
         }
 
@@ -428,7 +436,7 @@ class MailChimpController extends Controller
                 // Status Update to be sent immediately?
                 // TODO: This is an intermediary hardcoded hack and should be instead handled by the scheduler.
                 if ($form->get('campaignchain_hook_campaignchain_due')->has('execution_choice') && $form->get('campaignchain_hook_campaignchain_due')->get('execution_choice')->getData() == 'now') {
-                    $job = $this->get('campaignchain.job.operation.facebook.publish_status');
+                    $job = $this->get('campaignchain.job.operation.mailchimp.newsletter');
                     $job->execute($operation->getId());
                     // TODO: Add different flashbag which includes link to posted message on Facebook
                 }
