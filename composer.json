@@ -1,6 +1,6 @@
 {
     "name": "campaignchain/activity-mailchimp",
-    "description": "Add upcoming newsletter campaign",
+    "description": "Add upcoming newsletter campaign.",
     "keywords": ["mailchimp","campaignchain"],
     "type": "campaignchain-activity",
     "license": "Apache-2.0",
