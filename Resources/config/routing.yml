@@ -7,25 +7,25 @@
 
 campaignchain_activity_mailchimp_new:
     pattern: /activity/mailchimp/new
-    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:new }
+    defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:newAction }
 
 campaignchain_activity_mailchimp_edit:
     pattern: /activity/mailchimp/{id}/edit
-    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:edit }
+    defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:editAction }
 
 campaignchain_activity_mailchimp_edit_modal:
     pattern: /modal/activity/mailchimp/{id}/edit
-    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:editModal }
+    defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:editModalAction }
 
 campaignchain_activity_mailchimp_edit_api:
     pattern: /api/private/activity/mailchimp/byactivity/{id}/edit
-    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:editApi }
+    defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:editApiAction }
     options:
         expose: true
 
 campaignchain_activity_mailchimp_read:
     pattern: /activity/mailchimp/{id}
-    defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:read }
+    defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:readAction }
 
 campaignchain_activity_mailchimp_preview:
     pattern: /activity/mailchimp/preview/{id}

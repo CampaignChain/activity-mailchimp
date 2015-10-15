@@ -5,8 +5,31 @@
 # For the full copyright and license information, please view the LICENSE
 # file that was distributed with this source code.
 
+parameters:
+    campaignchain.activity.mailchimp.schedule:
+        bundle_name: "campaignchain/activity-mailchimp"
+        module_identifier: "campaignchain-mailchimp"
+        location: %campaignchain.location.mailchimp.newsletter%
+        equals_operation: true
+        operations:
+            - %campaignchain.operation.mailchimp.schedule%
+        handler: "campaignchain.activity.controller.handler.mailchimp.schedule"
+
 services:
-    campaignchain.channel.mailchimp.rest.client:
-        class: CampaignChain\Channel\MailChimpBundle\REST\MailChimpClient
+    campaignchain.activity.controller.mailchimp.schedule:
+        class: CampaignChain\CoreBundle\Controller\Module\ActivityModuleController
         calls:
             - [setContainer, ["@service_container"]]
+            - [setParameters, ["%campaignchain.activity.mailchimp.schedule%"]]
+    campaignchain.activity.controller.handler.mailchimp.schedule:
+        class: CampaignChain\Activity\MailChimpBundle\Controller\ScheduleHandler
+        arguments:
+            - "@doctrine.orm.entity_manager"
+            - "@campaignchain.operation.mailchimp.newsletter"
+            - "@campaignchain.core.location"
+            - "@campaignchain.channel.mailchimp.rest.client"
+            - "@campaignchain.job.operation.mailchimp.newsletter"
+            - "@campaignchain.core.util.datetime"
+            - "@session"
+            - "@templating"
+            - "@router"
