@@ -15,7 +15,7 @@ use CampaignChain\CoreBundle\Controller\Module\AbstractActivityHandler;
 use CampaignChain\CoreBundle\EntityService\LocationService;
 use CampaignChain\CoreBundle\Util\DateTimeUtil;
 use CampaignChain\Operation\MailChimpBundle\Job\SendNewsletter;
-use CampaignChain\Operation\SlideShareBundle\Job\PublishSlideshow;
+use CampaignChain\CoreBundle\Entity\Campaign;
 use Doctrine\ORM\EntityManager;
 use Symfony\Bundle\FrameworkBundle\Routing\Router;
 use Symfony\Bundle\TwigBundle\TwigEngine;
@@ -70,7 +70,7 @@ class ScheduleHandler extends AbstractActivityHandler
         $this->router           = $router;
     }
 
-    public function createContent(Location $location)
+    public function createContent(Location $location, Campaign $campaign)
     {
         // Retrieve upcoming newsletter campaigns from MailChimp.
         $client = $this->getRestApiConnectionByLocation($location);
