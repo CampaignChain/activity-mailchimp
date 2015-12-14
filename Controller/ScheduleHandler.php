@@ -70,7 +70,7 @@ class ScheduleHandler extends AbstractActivityHandler
         $this->router           = $router;
     }
 
-    public function createContent(Location $location, Campaign $campaign)
+    public function createContent(Location $location = null, Campaign $campaign = null)
     {
         // Retrieve upcoming newsletter campaigns from MailChimp.
         $client = $this->getRestApiConnectionByLocation($location);
