@@ -409,7 +409,7 @@ class ScheduleHandler extends AbstractActivityHandler
     {
         if ($form->get('campaignchain_hook_campaignchain_due')->has('execution_choice') && $form->get('campaignchain_hook_campaignchain_due')->get('execution_choice')->getData() == 'now') {
             $this->job->execute($operation->getId());
-            $content = $this->contentService->getSlideshowByOperation($operation);
+            $content = $this->contentService->getNewsletterByOperation($operation);
             $this->session->getFlashBag()->add(
                 'success',
                 'The newsletter was published. <a href="'.$content->getArchiveUrl().'">View it on MailChimp</a>.'
