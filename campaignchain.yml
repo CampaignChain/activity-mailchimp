@@ -9,8 +9,6 @@ modules:
             edit_modal: campaignchain_activity_mailchimp_edit_modal
             edit_api: campaignchain_activity_mailchimp_edit_api
             read: campaignchain_activity_mailchimp_read
-        services:
-            handler: campaignchain.activity.controller.handler.mailchimp.schedule
         hooks:
             default:
                 campaignchain-due: true
