@@ -23,7 +23,7 @@ use CampaignChain\CoreBundle\EntityService\LocationService;
 use CampaignChain\CoreBundle\Util\DateTimeUtil;
 use CampaignChain\Operation\MailChimpBundle\Job\SendNewsletter;
 use CampaignChain\CoreBundle\Entity\Campaign;
-use Doctrine\ORM\EntityManager;
+use Doctrine\Common\Persistence\ManagerRegistry;
 use Symfony\Bundle\FrameworkBundle\Routing\Router;
 use Symfony\Bundle\TwigBundle\TwigEngine;
 use Symfony\Component\Form\Form;
@@ -55,7 +55,7 @@ class ScheduleHandler extends AbstractActivityHandler
     private     $restApiConnection;
 
     public function __construct(
-        EntityManager $em,
+        ManagerRegistry $managerRegistry,
         NewsletterService $contentService,
         LocationService $locationService,
         MailChimpClient $restClient,
@@ -66,7 +66,7 @@ class ScheduleHandler extends AbstractActivityHandler
         Router $router
     )
     {
-        $this->em = $em;
+        $this->em = $managerRegistry->getManager();
         $this->contentService   = $contentService;
         $this->locationService  = $locationService;
         $this->restClient       = $restClient;

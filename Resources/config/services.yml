@@ -31,7 +31,7 @@ services:
     campaignchain.activity.controller.handler.mailchimp.schedule:
         class: CampaignChain\Activity\MailChimpBundle\Controller\ScheduleHandler
         arguments:
-            - "@doctrine.orm.entity_manager"
+            - "@doctrine"
             - "@campaignchain.operation.mailchimp.newsletter"
             - "@campaignchain.core.location"
             - "@campaignchain.channel.mailchimp.rest.client"
