@@ -34,6 +34,12 @@ campaignchain_activity_mailchimp_read:
     pattern: /activity/mailchimp/{id}
     defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:readAction }
 
+campaignchain_activity_mailchimp_read_modal:
+    pattern: /modal/activity/mailchimp/{id}
+    defaults: { _controller: campaignchain.activity.controller.mailchimp.schedule:readModalAction }
+    options:
+        expose: true
+
 campaignchain_activity_mailchimp_preview:
     pattern: /activity/mailchimp/preview/{id}
     defaults: { _controller: CampaignChainActivityMailChimpBundle:MailChimp:preview }

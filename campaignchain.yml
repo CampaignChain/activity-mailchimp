@@ -9,6 +9,7 @@ modules:
             edit_modal: campaignchain_activity_mailchimp_edit_modal
             edit_api: campaignchain_activity_mailchimp_edit_api
             read: campaignchain_activity_mailchimp_read
+            read_modal: campaignchain_activity_mailchimp_read_modal
         hooks:
             default:
                 campaignchain-due: true

@@ -129,7 +129,7 @@ class ScheduleHandler extends AbstractActivityHandler
 
     public function getContent(Location $location, Operation $operation = null)
     {
-        return $this->contentService->getNewsletterByOperation($operation);
+        return $this->contentService->getContent($operation);
     }
 
     public function processContent(Operation $operation, $data)
@@ -167,15 +167,27 @@ class ScheduleHandler extends AbstractActivityHandler
         return $newsletterOperation;
     }
 
-    public function readAction(Operation $operation)
+    /**
+     * @param Operation $operation
+     * @param bool $isModal Modal view yes or no?
+     * @return \Symfony\Component\HttpFoundation\Response
+     * @throws \Exception
+     */
+    public function readAction(Operation $operation, $isModal = false)
     {
         // Get the newsletter details.
-        $newsletter = $this->contentService->getNewsletterByOperation($operation);
+        $newsletter = $this->contentService->getContent($operation);
 
         // TODO: Check if newsletter schedule dates were edited on MailChimp.
 
+        if(!$isModal){
+            $twigTpl = 'CampaignChainOperationMailChimpBundle::read.html.twig';
+        } else {
+            $twigTpl = 'CampaignChainOperationMailChimpBundle::read_modal.html.twig';
+        }
+
         return $this->templating->renderResponse(
-            'CampaignChainOperationMailChimpBundle::read.html.twig',
+            $twigTpl,
             array(
                 'page_title' => $operation->getActivity()->getName(),
                 'operation' => $operation,
@@ -224,7 +236,7 @@ class ScheduleHandler extends AbstractActivityHandler
 
     public function postPersistEditEvent(Operation $operation, $content = null)
     {
-        $content = $this->contentService->getNewsletterByOperation($operation);
+        $content = $this->contentService->getContent($operation);
 
         // Content to be published immediately?
         $this->publishNow($operation, $content);
@@ -236,7 +248,7 @@ class ScheduleHandler extends AbstractActivityHandler
         $campaign = $activity->getCampaign();
 
         // Get the newsletter details.
-        $localNewsletter = $this->contentService->getNewsletterByOperation($operation);
+        $localNewsletter = $this->contentService->getContent($operation);
 
         // Retrieve up-to-date newsletter data from MailChimp
         $client = $this->getRestApiConnectionByOperation($operation);
@@ -356,14 +368,9 @@ class ScheduleHandler extends AbstractActivityHandler
         }
     }
 
-    public function preFormSubmitEditModalEvent(Operation $operation)
-    {
-        $this->makeRemoteSlideshowEmbeddable($operation);
-    }
-
     public function getEditRenderOptions(Operation $operation)
     {
-        $localNewsletter = $this->contentService->getNewsletterByOperation($operation);
+        $localNewsletter = $this->contentService->getContent($operation);
 
         return array(
             'template' => 'CampaignChainOperationMailChimpBundle::edit.html.twig',
@@ -376,11 +383,12 @@ class ScheduleHandler extends AbstractActivityHandler
 
     public function getEditModalRenderOptions(Operation $operation)
     {
-        $newsletter = $this->contentService->getNewsletterByOperation($operation);
+        $newsletter = $this->contentService->getContent($operation);
 
         return array(
             'template' => 'CampaignChainOperationMailChimpBundle::edit_modal.html.twig',
             'vars' => array(
+                'activity' => $operation->getActivity(),
                 'newsletter' => $newsletter,
                 'show_date' => true,
             )
@@ -421,7 +429,7 @@ class ScheduleHandler extends AbstractActivityHandler
     {
         if ($this->schedulerUtil->isDueNow($operation->getStartDate())) {
             $this->job->execute($operation->getId());
-            $content = $this->contentService->getNewsletterByOperation($operation);
+            $content = $this->contentService->getContent($operation);
             $this->session->getFlashBag()->add(
                 'success',
                 'The newsletter was published. <a href="'.$content->getArchiveUrl().'">View it on MailChimp</a>.'
