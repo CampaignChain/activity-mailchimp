@@ -33,6 +33,7 @@ use CampaignChain\CoreBundle\Entity\Activity;
 use CampaignChain\CoreBundle\Entity\Location;
 use CampaignChain\Operation\MailChimpBundle\Entity\MailChimpNewsletter;
 use CampaignChain\Operation\MailChimpBundle\EntityService\MailChimpNewsletter as NewsletterService;
+use CampaignChain\CoreBundle\Util\SchedulerUtil;
 
 class ScheduleHandler extends AbstractActivityHandler
 {
@@ -53,6 +54,8 @@ class ScheduleHandler extends AbstractActivityHandler
     protected $upcomingNewsletters;
     private     $remoteNewsletter;
     private     $restApiConnection;
+    /** @var SchedulerUtil */
+    protected $schedulerUtil;
 
     public function __construct(
         ManagerRegistry $managerRegistry,
@@ -63,7 +66,8 @@ class ScheduleHandler extends AbstractActivityHandler
         DateTimeUtil $datetimeUtil,
         $session,
         TwigEngine $templating,
-        Router $router
+        Router $router,
+        SchedulerUtil $schedulerUtil
     )
     {
         $this->em = $managerRegistry->getManager();
@@ -75,6 +79,7 @@ class ScheduleHandler extends AbstractActivityHandler
         $this->session          = $session;
         $this->templating       = $templating;
         $this->router           = $router;
+        $this->schedulerUtil = $schedulerUtil;
     }
 
     public function createContent(Location $location = null, Campaign $campaign = null)
@@ -206,10 +211,10 @@ class ScheduleHandler extends AbstractActivityHandler
         return $location;
     }
 
-    public function postPersistNewEvent(Operation $operation, Form $form, $content = null)
+    public function postPersistNewEvent(Operation $operation, $content = null)
     {
         // Content to be published immediately?
-        $this->publishNow($operation, $form, $content);
+        $this->publishNow($operation, $content);
 
         // Set send time per Activity's start time
         $content->setSendTime($operation->getActivity()->getStartDate());
@@ -217,12 +222,12 @@ class ScheduleHandler extends AbstractActivityHandler
         $this->em->flush();
     }
 
-    public function postPersistEditEvent(Operation $operation, Form $form, $content = null)
+    public function postPersistEditEvent(Operation $operation, $content = null)
     {
         $content = $this->contentService->getNewsletterByOperation($operation);
 
         // Content to be published immediately?
-        $this->publishNow($operation, $form, $content);
+        $this->publishNow($operation, $content);
     }
 
     public function preFormSubmitEditEvent(Operation $operation)
@@ -412,9 +417,9 @@ class ScheduleHandler extends AbstractActivityHandler
         return true;
     }
 
-    private function publishNow(Operation $operation, Form $form, $content)
+    private function publishNow(Operation $operation, $content)
     {
-        if ($form->get('campaignchain_hook_campaignchain_due')->has('execution_choice') && $form->get('campaignchain_hook_campaignchain_due')->get('execution_choice')->getData() == 'now') {
+        if ($this->schedulerUtil->isDueNow($operation->getStartDate())) {
             $this->job->execute($operation->getId());
             $content = $this->contentService->getNewsletterByOperation($operation);
             $this->session->getFlashBag()->add(
