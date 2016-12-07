@@ -157,7 +157,11 @@ class ScheduleHandler extends AbstractActivityHandler
         $newsletterOperation->setStatus($remoteNewsletter['status']);
         $newsletterOperation->setFromName($remoteNewsletter['from_name']);
         $newsletterOperation->setFromEmail($remoteNewsletter['from_email']);
-        $newsletterOperation->setSubject($remoteNewsletter['subject']);
+        if(isset($remoteNewsletter['subject'])) {
+            $newsletterOperation->setSubject($remoteNewsletter['subject']);
+        } else {
+            throw new \Exception('The email subject must not be empty. Please specify it in MailChimp.');
+        }
         $newsletterOperation->setArchiveUrl($remoteNewsletter['archive_url']);
         $newsletterOperation->setArchiveUrlLong($remoteNewsletter['archive_url_long']);
         $newsletterOperation->setTrackingHtmlClicks($remoteNewsletter['tracking']['html_clicks']);
