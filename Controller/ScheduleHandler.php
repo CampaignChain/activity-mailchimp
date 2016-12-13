@@ -51,7 +51,7 @@ class ScheduleHandler extends AbstractActivityHandler
     protected $datetimeUtil;
     protected $session;
     protected $templating;
-    protected $upcomingNewsletters;
+    protected $unpublishedMCCampaigns;
     private     $remoteNewsletter;
     private     $restApiConnection;
     /** @var SchedulerUtil */
@@ -85,12 +85,11 @@ class ScheduleHandler extends AbstractActivityHandler
     public function createContent(Location $location = null, Campaign $campaign = null)
     {
         // Retrieve upcoming newsletter campaigns from MailChimp.
+        /** @var MailChimpClient $client */
         $client = $this->getRestApiConnectionByLocation($location);
-        $this->upcomingNewsletters = $client->campaigns->getList(array(
-            'status' => 'save,paused,schedule',
-        ));
+        $unpublishedMCCampaigns = $client->getUnpublishedCampaigns();
 
-        if($this->upcomingNewsletters['total'] == 0){
+        if($unpublishedMCCampaigns['total_items'] == 0){
             $this->session->getFlashBag()->add(
                 'warning',
                 'No upcoming newsletter campaigns available.'
@@ -102,15 +101,18 @@ class ScheduleHandler extends AbstractActivityHandler
 
         $newsletters = array();
 
-        foreach($this->upcomingNewsletters['data'] as $key => $upcomingNewsletter){
+        foreach($unpublishedMCCampaigns['campaigns'] as $key => $unpublishedMCCampaign){
             // Check if newsletter has already been added to this Campaign.
             if(!$this->locationService->existsInAllCampaigns(
                 self::LOCATION_BUNDLE_NAME, self::LOCATION_MODULE_IDENTIFIER,
-                $upcomingNewsletter['id']
+                $unpublishedMCCampaign['id']
             )){
+                // Remember this MailChimp campaign for later.
+                $this->unpublishedMCCampaigns[$unpublishedMCCampaign['id']] = $unpublishedMCCampaign;
+
                 // TODO: If send_time not empty, then pass to due hook.
-                $newsletters[$key] = $upcomingNewsletter['title']
-                    .' ('.$upcomingNewsletter['subject'].')';
+                $newsletters[$unpublishedMCCampaign['id']] = $unpublishedMCCampaign['settings']['title']
+                    .' ('.$unpublishedMCCampaign['settings']['subject_line'].')';
             }
         }
 
@@ -140,30 +142,31 @@ class ScheduleHandler extends AbstractActivityHandler
         $newsletterOperation = new MailChimpNewsletter();
         $newsletterOperation->setOperation($operation);
         $newsletterOperation->setCampaignId($remoteNewsletter['id']);
-        $newsletterOperation->setWebId($remoteNewsletter['web_id']);
-        $newsletterOperation->setListId($remoteNewsletter['list_id']);
-        $newsletterOperation->setFolderId($remoteNewsletter['folder_id']);
-        $newsletterOperation->setTemplateId($remoteNewsletter['template_id']);
+        //$newsletterOperation->setWebId($remoteNewsletter['web_id']);
+        $newsletterOperation->setListId($remoteNewsletter['recipients']['list_id']);
+        $newsletterOperation->setFolderId($remoteNewsletter['settings']['folder_id']);
+        $newsletterOperation->setTemplateId($remoteNewsletter['settings']['template_id']);
         $newsletterOperation->setContentType($remoteNewsletter['content_type']);
-        $newsletterOperation->setTitle($remoteNewsletter['title']);
+        $newsletterOperation->setTitle($remoteNewsletter['settings']['title']);
         $newsletterOperation->setType($remoteNewsletter['type']);
         $newsletterOperation->setCreateTime(new \DateTime($remoteNewsletter['create_time']));
         if(isset($remoteNewsletter['send_time']) && strlen($remoteNewsletter['send_time'])){
             $newsletterOperation->setSendTime(new \DateTime($remoteNewsletter['send_time']));
         }
+        // TODO: Does this parameter still exist in REST API v3?
         if(isset($remoteNewsletter['content_updated_time']) && strlen($remoteNewsletter['content_updated_time'])){
             $newsletterOperation->setContentUpdatedTime(new \DateTime($remoteNewsletter['content_updated_time']));
         }
         $newsletterOperation->setStatus($remoteNewsletter['status']);
-        $newsletterOperation->setFromName($remoteNewsletter['from_name']);
-        $newsletterOperation->setFromEmail($remoteNewsletter['from_email']);
-        if(isset($remoteNewsletter['subject'])) {
-            $newsletterOperation->setSubject($remoteNewsletter['subject']);
+        $newsletterOperation->setFromName($remoteNewsletter['settings']['from_name']);
+        $newsletterOperation->setFromEmail($remoteNewsletter['settings']['reply_to']);
+        if(isset($remoteNewsletter['settings']['subject_line'])) {
+            $newsletterOperation->setSubject($remoteNewsletter['settings']['subject_line']);
         } else {
             throw new \Exception('The email subject must not be empty. Please specify it in MailChimp.');
         }
         $newsletterOperation->setArchiveUrl($remoteNewsletter['archive_url']);
-        $newsletterOperation->setArchiveUrlLong($remoteNewsletter['archive_url_long']);
+        $newsletterOperation->setArchiveUrlLong($remoteNewsletter['long_archive_url']);
         $newsletterOperation->setTrackingHtmlClicks($remoteNewsletter['tracking']['html_clicks']);
         $newsletterOperation->setTrackingTextClicks($remoteNewsletter['tracking']['text_clicks']);
         $newsletterOperation->setTrackingOpens($remoteNewsletter['tracking']['opens']);
@@ -205,7 +208,7 @@ class ScheduleHandler extends AbstractActivityHandler
     {
         $remoteNewsletter = $this->getRemoteNewsletter($data);
 
-        $activity->setName($remoteNewsletter['title']);
+        $activity->setName($remoteNewsletter['settings']['title']);
 
         return $activity;
     }
@@ -214,8 +217,8 @@ class ScheduleHandler extends AbstractActivityHandler
     {
         $remoteNewsletter = $this->getRemoteNewsletter($data);
         $location->setIdentifier($remoteNewsletter['id']);
-        $location->setName($remoteNewsletter['title']);
-        $location->setUrl($remoteNewsletter['archive_url_long']);
+        $location->setName($remoteNewsletter['settings']['title']);
+        $location->setUrl($remoteNewsletter['long_archive_url']);
 
         return $location;
     }
@@ -248,6 +251,7 @@ class ScheduleHandler extends AbstractActivityHandler
 
     public function preFormSubmitEditEvent(Operation $operation)
     {
+/*
         $activity = $operation->getActivity();
         $campaign = $activity->getCampaign();
 
@@ -256,11 +260,7 @@ class ScheduleHandler extends AbstractActivityHandler
 
         // Retrieve up-to-date newsletter data from MailChimp
         $client = $this->getRestApiConnectionByOperation($operation);
-        $remoteNewsletterData = $client->campaigns->getList(array(
-            'campaign_id' => $localNewsletter->getCampaignId(),
-        ));
-
-        $remoteNewsletter = $remoteNewsletterData['data'][0];
+        $remoteNewsletter = $client->getCampaign($localNewsletter->getCampaignId());
 
         // If content update times of remote and local newsletter diverge, then
         // the content differs.
@@ -370,6 +370,7 @@ class ScheduleHandler extends AbstractActivityHandler
                 );
             }
         }
+*/
     }
 
     public function getEditRenderOptions(Operation $operation)
@@ -459,7 +460,7 @@ class ScheduleHandler extends AbstractActivityHandler
     {
         if(!$this->remoteNewsletter) {
             $newsletterKey = $data['newsletter'];
-            $this->remoteNewsletter = $this->upcomingNewsletters['data'][$newsletterKey];
+            $this->remoteNewsletter = $this->unpublishedMCCampaigns[$newsletterKey];
         }
 
         return $this->remoteNewsletter;
