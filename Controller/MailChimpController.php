@@ -23,9 +23,9 @@ use Symfony\Component\HttpFoundation\Request;
 class MailChimpController extends Controller
 {
     public function previewAction(Request $request, $id){
-        $restService = $this->get('campaignchain.channel.mailchimp.rest.client');
-        $restService->connectByNewsletterId($id);
-        $newsletterPreview = $restService->getNewsletterPreview($id);
+        $mailChimpRestService = $this->get('campaignchain.channel.mailchimp.rest.client');
+        $mailChimpRestService->connectByCampaignId($id);
+        $newsletterPreview = $mailChimpRestService->getCampaignHTML($id);
 
         return $this->render(
             'CampaignChainActivityMailChimpBundle::preview.html.twig',
